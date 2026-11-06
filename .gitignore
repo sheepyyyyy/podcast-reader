@@ -1,0 +1,11 @@
+.build/
+build/
+.claude/
+.DS_Store
+
+# Spoken test clips. Apple's license limits sharing recordings of its voices, so
+# scripts/test.sh makes these on your own Mac the first time it runs.
+Tests/PodcastReaderCoreTests/Fixtures/sample.mp3
+Tests/PodcastReaderCoreTests/Fixtures/sample_vbr.mp3
+Tests/PodcastReaderCoreTests/Fixtures/sample.m4a
+Tests/PodcastReaderCoreTests/Fixtures/sample.wav
