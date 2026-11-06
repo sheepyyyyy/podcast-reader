@@ -80,14 +80,18 @@ h1 {
 .play[aria-pressed="true"] .pause { display: block; }
 .play[aria-pressed="true"] .start { display: none; }
 .player-note { font-size: clamp(17px, 1.35vw, 22px); line-height: 1.3; max-width: 70ch; color: var(--white); }
-.caption { font-size: var(--size-big); font-weight: 800; line-height: 1.08; letter-spacing: -.035em; }
+.caption { position: relative; font-size: var(--size-big); font-weight: 800; line-height: 1.08; letter-spacing: -.035em; transition: transform .7s var(--ease); }
+/* With script, the first screen holds the player, and the words move to stay in view, as in the app. */
+html.js .hero { display: flex; flex-direction: column; min-height: 100svh; }
+html.js .player { flex: 1 1 0; display: flex; flex-direction: column; min-height: clamp(360px, 54svh, 900px); padding-bottom: 0; }
+html.js .window { flex: 1 1 0; min-height: 0; overflow: hidden; }
 .caption .line { display: block; }
-.caption .line + .line { margin-top: .32em; }
 .word {
   display: inline; padding: 0; border: 0; background: none; cursor: pointer;
   font: inherit; letter-spacing: inherit; color: var(--upcoming);
-  transition: color .12s linear;
+  transition: color .12s linear, opacity .35s linear;
 }
+.word.out { opacity: 0; }
 .word:hover { color: var(--mint); }
 .word.past { color: var(--past); }
 .word.now { color: var(--white); }
@@ -235,7 +239,7 @@ html.js .say-in.seen { opacity: 1; }
       </button>
       <p class="player-note">This is Heart, one of its voices. Press play, or click any word to go there.</p>
     </div>
-    <div class="caption" role="group" aria-label="Words of the clip. Choose one to play from there.">
+    <div class="window"><div class="caption" role="group" aria-label="Words of the clip. Choose one to play from there.">
       <span class="line">
         <button class="word" type="button" data-s="0.25">The</button> <button class="word" type="button" data-s="0.362">brain</button> <button class="word" type="button" data-s="0.75">does</button> <button class="word" type="button" data-s="0.95">not</button> <button class="word" type="button" data-s="1.175">keep</button> <button class="word" type="button" data-s="1.363">a</button> <button class="word" type="button" data-s="1.45">memory</button> <button class="word" type="button" data-s="1.875">in</button> <button class="word" type="button" data-s="2.038">one</button> <button class="word" type="button" data-s="2.288">tidy</button> <button class="word" type="button" data-s="2.625">place.</button>
       </span>
@@ -245,7 +249,7 @@ html.js .say-in.seen { opacity: 1; }
       <span class="line">
         <button class="word" type="button" data-s="7.662">Testing</button> <button class="word" type="button" data-s="8.037">yourself</button> <button class="word" type="button" data-s="8.5">makes</button> <button class="word" type="button" data-s="8.775">that</button> <button class="word" type="button" data-s="9">path</button> <button class="word" type="button" data-s="9.325">stronger.</button>
       </span>
-    </div>
+    </div></div>
     <audio src="audio/heart.m4a" preload="auto"></audio>
   </section>
 </header>
@@ -387,11 +391,35 @@ document.documentElement.classList.add('js');
   const play = document.querySelector('.play');
   const words = [...document.querySelectorAll('.word')];
   const starts = words.map((word) => Number(word.dataset.s));
+  const view = document.querySelector('.window');
+  const caption = document.querySelector('.caption');
   const end = audio.duration || 10.35;
   let shown = null;
   let touched = false;
   let inView = false;
   let idleFrom = null;
+
+  // The window holds whole lines, so no line is ever cut in half.
+  function fit() {
+    view.style.flex = '';
+    view.style.height = '';
+    const line = parseFloat(getComputedStyle(caption).lineHeight);
+    const lines = Math.max(2, Math.floor(view.clientHeight / line));
+    view.style.flex = 'none';
+    view.style.height = Math.min(lines * line, caption.offsetHeight) + 'px';
+  }
+
+  // Keeps the spoken word in view, with the line before it, and no space left under the last line.
+  function place(index) {
+    const line = parseFloat(getComputedStyle(caption).lineHeight);
+    const room = Math.max(0, caption.offsetHeight - view.clientHeight);
+    const top = index < 0 ? 0 : Math.max(0, Math.min(words[index].offsetTop - line, room));
+    caption.style.transform = 'translateY(' + -top + 'px)';
+    words.forEach((word) => {
+      const y = word.offsetTop - top;
+      word.classList.toggle('out', y + line / 2 < 0 || y + line / 2 > view.clientHeight);
+    });
+  }
 
   function paint(time) {
     let now = -1;
@@ -402,6 +430,7 @@ document.documentElement.classList.add('js');
       word.classList.toggle('past', i < now);
       word.classList.toggle('now', i === now);
     });
+    place(now);
   }
 
   // Until someone uses it, it runs silently, so it's clear what the app does.
@@ -409,7 +438,7 @@ document.documentElement.classList.add('js');
     if (touched || !inView) { idleFrom = null; return; }
     if (idleFrom === null) idleFrom = clock;
     let time = (clock - idleFrom) / 1000;
-    if (time > end + 1.2) { idleFrom = clock; time = 0; }
+    if (time > end + .6) { idleFrom = clock; time = 0; }
     paint(time);
     requestAnimationFrame(idle);
   }
@@ -449,9 +478,22 @@ document.documentElement.classList.add('js');
   });
   audio.addEventListener('ended', () => { audio.currentTime = 0; paint(-1); });
 
+  function refit() {
+    fit();
+    place(shown === null ? -1 : shown);
+  }
+  addEventListener('resize', refit);
+  document.fonts.ready.then(refit);
+  refit();
+
   // One stop for the whole caption when tabbing, then the arrow keys move between words.
   words.forEach((word, i) => {
     word.tabIndex = i === 0 ? 0 : -1;
+    word.addEventListener('focus', () => {
+      touched = true;
+      view.scrollTop = 0;
+      if (audio.paused) paint(starts[i]);
+    });
     word.addEventListener('click', () => {
       paint(starts[i]);
       start(starts[i]);
