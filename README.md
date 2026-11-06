@@ -2,17 +2,21 @@
 
 A Mac app for studying by reading along while you listen.
 
+<a href="https://github.com/sheepyyyyy/podcast-reader/releases/latest/download/Podcast-Reader.dmg"><img src="docs/images/download-button.svg" alt="Download for Mac" width="300" height="72"></a>
+
+Or see it first on [its page](https://sheepyyyyy.github.io/podcast-reader/), where you can try the captions and hear the voice.
+
 - **Audio:** give it a recording, and it shows the words as huge synced captions.
 - **PDFs:** give it a PDF, and it reads the document aloud on the real page, highlighting each word as it's spoken.
 
 Either way, click any word to go there. Everything runs on your Mac, so nothing you read or listen to leaves your computer. It's English only for now.
 
-## Download
+## Install
 
 You'll need a Mac with Apple silicon (M1 or later) and macOS 26 or later.
 
-1. Download `Podcast-Reader.zip` from the [latest release](https://github.com/sheepyyyyy/podcast-reader/releases/latest), and unzip it.
-2. Drag **Podcast Reader** into your Applications folder.
+1. Click **Download for Mac** above, and open the file it downloads.
+2. Drag **Podcast Reader** into Applications.
 3. Open it. macOS will block it the first time, because this free app isn't signed with a paid Apple Developer ID.
 4. Go to System Settings, then Privacy & Security, scroll down and click **Open Anyway**. You only need to do this once.
 
@@ -67,6 +71,14 @@ A PDF keeps the voice it was prepared with. To change it, right-click its row an
 If you quit while a PDF is being prepared with Kokoro, add the same PDF again with the same voice, and it picks up where it stopped. **Cancel** throws that work away.
 
 ## Development
+
+Build the installer people download, which needs `uv` (`brew install uv`):
+
+```bash
+scripts/build-dmg.sh
+```
+
+The download page is `docs/index.html`, which GitHub Pages publishes from the `docs` folder. Its button always fetches `Podcast-Reader.dmg` from the latest release, so keep that file name.
 
 Run the tests:
 
@@ -132,6 +144,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift run ReaderSnapsho
 - `Sources/PodcastReaderUI`: the screens and their models.
 - `Sources/PodcastReader`: the app's entry point.
 - `Sources/ReaderSnapshots`: the development tool above.
+- `docs/index.html`: the download page.
 - `docs/superpowers`: the design specs and implementation plans.
 
 ## Credits and license
