@@ -55,6 +55,7 @@ Saved transcripts, bookmarks, positions and each PDF's generated speech live in 
 
 - **What gets read:** repeated headers and page numbers are skipped. Footnotes, captions and tables are read as they are, and equations will sound poor.
 - **Scanned PDFs:** these have no real text, so they can't be read yet. The app tells you when a PDF looks like a scan.
+- **Words in pieces:** some PDFs, such as ones printed from Chrome, store words in pieces, as in "w" then "ritten". The app joins pieces that touch on the page. Where pieces overlap, it joins them only when they make a real word, so "loan minus" stays two words.
 - **Selecting text:** dragging across the page still selects text for copying. A click without a drag jumps to that word.
 
 ### Voices for PDFs
@@ -104,6 +105,12 @@ scripts/make-fixtures.sh
 
 ```bash
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift scripts/make-pdf-fixtures.swift Tests/PodcastReaderCoreTests/Fixtures
+```
+
+`chrome.pdf` is `scripts/chrome-fixture/page.html` printed by Chrome, which needs the internet for its font:
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --user-data-dir="$(mktemp -d)" --no-pdf-header-footer --virtual-time-budget=8000 --print-to-pdf=Tests/PodcastReaderCoreTests/Fixtures/chrome.pdf "file://$PWD/scripts/chrome-fixture/page.html"
 ```
 
 Check the design without opening the app. This renders every screen to PNG files, offscreen:
