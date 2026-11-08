@@ -157,6 +157,19 @@ private struct LineRow: View, Equatable {
         case past
         case active(wordIndex: Int)
         case upcoming
+
+        enum Phase {
+            case past, active, upcoming
+        }
+
+        /// Where the line is, leaving out which word is active.
+        var phase: Phase {
+            switch self {
+            case .past: .past
+            case .active: .active
+            case .upcoming: .upcoming
+            }
+        }
     }
 
     let firstWord: Int
@@ -183,7 +196,9 @@ private struct LineRow: View, Equatable {
                 }
             }
         }
-        .animation(.easeOut(duration: 0.12), value: state)
+        // Only a change of line fades. Fading each word as it lights up redraws the whole
+        // line for every frame of the fade, which was half the work captions did.
+        .animation(.easeOut(duration: 0.12), value: state.phase)
     }
 
     private func color(ofWord index: Int) -> Color {

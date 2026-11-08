@@ -20,7 +20,7 @@ package struct ReaderView: View {
 
     package var body: some View {
         ZStack {
-            AuroraBackground()
+            AuroraBackground(isDrifting: model.player.isPlaying)
 
             HStack(spacing: 0) {
                 captionsColumn

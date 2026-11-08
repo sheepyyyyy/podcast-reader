@@ -111,6 +111,57 @@ struct PlayerControllerTests {
         #expect(zip(ticks, ticks.dropFirst()).allSatisfy { $0 <= $1 })
     }
 
+    /// Without the tick asked for, the first one after 1.37 s would be the routine one at 1.5.
+    /// The margin allows for other tests keeping the main thread busy for a moment.
+    @Test func aTickAskedForArrivesOnTime() async throws {
+        let player = try await ready()
+        var ticks: [TimeInterval] = []
+        player.onTick = { ticks.append($0) }
+        player.seek(to: 1)
+        player.tick(at: 1.37)
+        player.play()
+        try await wait { ticks.contains { $0 >= 1.37 } }
+        player.stop()
+        let arrived = try #require(ticks.first { $0 >= 1.37 })
+        #expect(arrived < 1.45, "first tick after 1.37 s came at \(arrived)")
+    }
+
+    @Test func ticksAreFewWhenNothingIsAskedFor() async throws {
+        let player = try await ready()
+        var ticks = 0
+        player.onTick = { _ in ticks += 1 }
+        player.play()
+        try await Task.sleep(for: .seconds(1))
+        player.stop()
+        #expect(ticks <= 8, "\(ticks) ticks in a second")
+    }
+
+    @Test func theTimeShownChangesOnlyWhenItWouldShow() async throws {
+        let player = try await ready()
+        var shown = [player.displayTime]
+        player.play()
+        let end = Date().addingTimeInterval(1)
+        while Date() < end {
+            try await Task.sleep(for: .milliseconds(5))
+            if player.displayTime != shown.last { shown.append(player.displayTime) }
+        }
+        player.stop()
+        // An 8-second file moves the bar a thousandth every 8 ms, so it changes at every tick,
+        // but no more often than that.
+        #expect(shown.count <= 9, "\(shown.count - 1) changes in a second")
+        #expect(shown.count >= 3)
+    }
+
+    @Test func pausingKeepsTheExactTime() async throws {
+        let player = try await ready()
+        player.play()
+        try await Task.sleep(for: .milliseconds(600))
+        let before = player.exactTime
+        player.pause()
+        #expect(abs(player.currentTime - before) < 0.05)
+        #expect(player.displayTime == player.currentTime)
+    }
+
     @Test func stopHaltsPlaybackAndTicks() async throws {
         let player = try await ready()
         var ticks = 0

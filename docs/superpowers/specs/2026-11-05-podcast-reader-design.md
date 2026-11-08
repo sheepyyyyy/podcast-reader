@@ -123,7 +123,7 @@ While a lecture is being transcribed, a progress bar shows how far along it is. 
 
 The look matches the approved mockup:
 
-- Background: navy `#0A1C4A`, with slow drifting blue, violet and teal color fields
+- Background: navy `#0A1C4A`, with slow drifting blue, violet and teal color fields. They drift only while audio plays with the app in front, ten times a second, and are drawn at an eighth of the size and stretched. Otherwise they hold still, because a full-size field redrawn 30 times a second kept the graphics chip about 20% busy on every screen.
 - Type: SF Pro Display Heavy, left aligned, with tight tracking of about −3.5%
 - Past lines: `#4F74B5`
 - Upcoming lines and words not yet spoken: `#9FC2FF`

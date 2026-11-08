@@ -54,6 +54,11 @@ package final class ReaderModel {
     @ObservationIgnored private var saveLoop: Task<Void, Never>?
     @ObservationIgnored private var searchIndex: SearchIndex?
     @ObservationIgnored private var terminationObserver: (any NSObjectProtocol)?
+    @ObservationIgnored private var occlusionObserver: (any NSObjectProtocol)?
+    /// False while no one can see the reader, such as with the window covered or minimized
+    /// while listening. The highlight then waits, since moving it is most of the work
+    /// playing does, and catches up as soon as the window can be seen.
+    @ObservationIgnored private(set) var isOnScreen = true
 
     package init(
         lecture: Lecture,
@@ -83,6 +88,21 @@ package final class ReaderModel {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.savePosition() }
         }
+        occlusionObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeOcclusionStateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.setOnScreen(NSApp?.occlusionState.contains(.visible) ?? true)
+            }
+        }
+    }
+
+    func setOnScreen(_ value: Bool) {
+        guard value != isOnScreen else { return }
+        isOnScreen = value
+        updateActiveWord(at: player.exactTime)
     }
 
     var activeLine: Int? {
@@ -240,7 +260,9 @@ package final class ReaderModel {
     // MARK: Bookmarks
 
     package func addBookmark() {
-        guard lecture.addBookmark(wordIndex: activeWord ?? 0) else { return }
+        // Worked out afresh, as the highlight waits while the window can't be seen.
+        let word = isOnScreen ? activeWord : clock.activeWordIndex(at: player.exactTime)
+        guard lecture.addBookmark(wordIndex: word ?? 0) else { return }
         saveLectureInBackground()
         showToast("Bookmarked")
     }
@@ -281,8 +303,8 @@ package final class ReaderModel {
         fadeTask?.cancel()
         toastTask?.cancel()
         searchTask?.cancel()
-        if let terminationObserver {
-            NotificationCenter.default.removeObserver(terminationObserver)
+        for observer in [terminationObserver, occlusionObserver].compactMap(\.self) {
+            NotificationCenter.default.removeObserver(observer)
         }
         player.stop()
     }
@@ -305,7 +327,7 @@ package final class ReaderModel {
     var currentLecture: Lecture {
         var copy = lecture
         if hasStarted {
-            copy.position = player.currentTime
+            copy.position = player.exactTime
         }
         return copy
     }
@@ -339,10 +361,15 @@ package final class ReaderModel {
     }
 
     private func updateActiveWord(at time: TimeInterval) {
+        guard isOnScreen else {
+            player.tick(at: nil)
+            return
+        }
         let word = clock.activeWordIndex(at: time)
-        // Assigning always notifies observers, and this runs 30 times a second.
+        // Assigning always notifies observers, even of the same word.
         if word != activeWord {
             activeWord = word
         }
+        player.tick(at: clock.nextChange(after: time))
     }
 }

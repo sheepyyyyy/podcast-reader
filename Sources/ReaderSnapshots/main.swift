@@ -20,6 +20,10 @@
 //   swift run ReaderSnapshots pdf-stress <output-folder> <pdf-file>
 //       Imports a long PDF, reports timings, and checks jumps keep the highlight in
 //       view. Generates a 300-page PDF at that path if there's no file there.
+//
+//   swift run ReaderSnapshots energy <output-folder> <audio-file>
+//       Reports how much processor time each screen uses, still and playing.
+//       ENERGY_SECONDS, ENERGY_WIDTH, ENERGY_HEIGHT and ENERGY_ONLY adjust it.
 import AppKit
 import CoreText
 import PDFKit
@@ -587,8 +591,99 @@ func stress(output: URL, audio: URL) async throws {
 }
 
 let arguments = CommandLine.arguments
-guard arguments.count == 4, ["screens", "stress", "landing", "pdf-stress", "interact", "library-check"].contains(arguments[1]) else {
-    print("Usage: ReaderSnapshots screens|stress|landing|pdf-stress|interact|library-check <output-folder> <audio-or-pdf-file>")
+/// Processor time this process has used, in seconds, across all its threads.
+func processorTime() -> Double {
+    var usage = rusage()
+    getrusage(RUSAGE_SELF, &usage)
+    func seconds(_ time: timeval) -> Double { Double(time.tv_sec) + Double(time.tv_usec) / 1_000_000 }
+    return seconds(usage.ru_utime) + seconds(usage.ru_stime)
+}
+
+/// How much work each screen does while it sits there, as a share of one core. Run
+/// `top -pid` beside it for the system's own energy figures; the screens are announced
+/// as they start so the two line up.
+@MainActor
+func energy(output: URL, audio: URL) async throws {
+    let scratch = FileManager.default.temporaryDirectory
+        .appending(path: "ReaderSnapshots-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: scratch) }
+    let library = Library(directory: scratch)
+    let environment = ProcessInfo.processInfo.environment
+    let size = CGSize(
+        width: Double(environment["ENERGY_WIDTH"] ?? "") ?? 1180,
+        height: Double(environment["ENERGY_HEIGHT"] ?? "") ?? 760
+    )
+    let seconds = Double(environment["ENERGY_SECONDS"] ?? "") ?? 10
+    print("Process \(ProcessInfo.processInfo.processIdentifier), \(Int(seconds)) s per screen")
+    // The background only drifts while the app counts as active and visible.
+    print("Active: \(NSApp.isActive), visible: \(NSApp.occlusionState.contains(.visible))")
+
+    /// Plays from the start again whenever it reaches the end, so it plays the whole time.
+    let only = environment["ENERGY_ONLY"]
+    func measure<Content: View>(_ label: String, _ content: Content, playing reader: ReaderModel? = nil) async throws {
+        if let only, !label.contains(only) { return }
+        let host = OffscreenHost(content, size: size)
+        if let reader { reader.player.play() }
+        try await settle(2)
+        print("\(Date().formatted(date: .omitted, time: .standard)) \(label)")
+        let start = processorTime()
+        let began = Date()
+        while Date().timeIntervalSince(began) < seconds {
+            try await Task.sleep(for: .milliseconds(250))
+            if let reader, !reader.player.isPlaying { reader.player.play() }
+        }
+        let share = (processorTime() - start) / Date().timeIntervalSince(began) * 100
+        print("  \(String(format: "%.1f", share))% of one core")
+        reader?.player.pause()
+        host.close()
+        try await settle(1)
+    }
+
+    try await measure("Empty window, for comparison", Color.black)
+
+    let home = AppModel(library: library)
+    try await measure("Home screen", RootView(model: home).preferredColorScheme(.dark))
+
+    // About the pace of real speech.
+    let words = sampleText.split(separator: " ").enumerated().map { index, text in
+        Word(text: String(text), start: Double(index) * 0.35, end: Double(index + 1) * 0.35)
+    }
+    let lecture = try library.makeLecture(audioAt: audio, transcript: Transcript(words: words), duration: 8)
+    let reader = ReaderModel(lecture: lecture, audioURL: audio, library: library, isMuted: true)
+    try await reader.start()
+    let captions = ReaderView(model: reader, onClose: {}).preferredColorScheme(.dark)
+    try await measure("Captions, paused", captions)
+    try await measure("Captions, playing", captions, playing: reader)
+    func setSeen(_ value: Bool) {
+        ToolApplication.isSeen = value
+        NotificationCenter.default.post(name: NSApplication.didChangeOcclusionStateNotification, object: NSApp)
+    }
+    setSeen(false)
+    try await measure("Captions, playing, covered", captions, playing: reader)
+    setSeen(true)
+    reader.close()
+
+    let pdf = audio.deletingLastPathComponent().appending(path: "document.pdf")
+    let imported = try await DocumentImporter(library: library).importDocument(at: pdf, onProgress: { _ in })
+    let pdfReader = ReaderModel(
+        lecture: imported,
+        audioURL: try require(library.audioURL(for: imported)),
+        library: library,
+        documentURL: library.documentURL(for: imported),
+        isMuted: true
+    )
+    try await pdfReader.start()
+    let page = ReaderView(model: pdfReader, onClose: {}).preferredColorScheme(.dark)
+    try await measure("PDF, paused", page)
+    try await measure("PDF, playing", page, playing: pdfReader)
+    setSeen(false)
+    try await measure("PDF, playing, covered", page, playing: pdfReader)
+    setSeen(true)
+    pdfReader.close()
+}
+
+guard arguments.count == 4, ["screens", "stress", "landing", "pdf-stress", "interact", "library-check", "energy"].contains(arguments[1]) else {
+    print("Usage: ReaderSnapshots screens|stress|landing|pdf-stress|interact|library-check|energy <output-folder> <audio-or-pdf-file>")
     exit(1)
 }
 let output = URL(fileURLWithPath: arguments[2], isDirectory: true)
@@ -598,6 +693,10 @@ let audio = URL(fileURLWithPath: arguments[3])
 /// really taking keyboard focus from whatever the person is doing.
 final class ToolApplication: NSApplication {
     override var isActive: Bool { true }
+    /// Its windows are off every screen, but should behave as they do when seen, unless a
+    /// check wants them treated as covered.
+    static var isSeen = true
+    override var occlusionState: NSApplication.OcclusionState { Self.isSeen ? .visible : [] }
 }
 
 let application = ToolApplication.shared
@@ -614,6 +713,7 @@ Task { @MainActor in
         case "interact": try await interact(output: output, audio: audio)
         #endif
         case "library-check": try await libraryCheck(output: output)
+        case "energy": try await energy(output: output, audio: audio)
         default: try await landing(output: output, audio: audio)
         }
         exit(0)

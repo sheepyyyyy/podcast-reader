@@ -49,6 +49,8 @@ Drop an MP3, M4A, WAV or PDF file onto the home screen. The first time takes a m
 | Esc | Close the side panel |
 | ⌃⌘F | Full screen |
 
+It's built to go easy on your battery. Paused or on the home screen, it does almost nothing. While playing, the background drifts and the highlight follows each word. When the window is covered or minimized, the highlight waits until you can see it again, so listening in the background costs little more than the audio.
+
 Saved transcripts, bookmarks, positions and each PDF's generated speech live in `~/Library/Application Support/Podcast Reader/lectures/`. Your own files stay where you keep them.
 
 ### PDF notes
@@ -135,6 +137,12 @@ Check real input without touching the screen. This sends real mouse, keyboard an
 
 ```bash
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift run ReaderSnapshots interact /tmp/snapshots Tests/PodcastReaderCoreTests/Fixtures/sample.mp3
+```
+
+Measure how much work each screen does, still, playing, and playing with the window covered. Run it with a release build, since a debug build does far more work:
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift run -c release ReaderSnapshots energy /tmp/snapshots Tests/PodcastReaderCoreTests/Fixtures/sample.mp3
 ```
 
 Measure a long PDF. This imports it for real, times the work, and checks that jumps keep the highlight in view. If the file doesn't exist, it generates a 300-page PDF there first:

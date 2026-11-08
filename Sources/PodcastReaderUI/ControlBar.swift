@@ -145,7 +145,7 @@ private struct SpeedButton: View {
     }
 }
 
-/// Kept separate so only this view redraws as the playback time changes.
+/// Kept separate so only this view redraws as the time shown changes.
 private struct ProgressBar: View {
     let model: ReaderModel
 
@@ -157,7 +157,7 @@ private struct ProgressBar: View {
         VStack(spacing: 2) {
             GeometryReader { geometry in
                 let width = geometry.size.width
-                let time = model.player.currentTime
+                let time = model.player.displayTime
                 let fraction = duration > 0 ? min(max(time / duration, 0), 1) : 0
 
                 ZStack(alignment: .leading) {
@@ -190,10 +190,10 @@ private struct ProgressBar: View {
             .frame(height: 18)
             .accessibilityElement()
             .accessibilityLabel("Progress")
-            .accessibilityValue(TimeFormat.string(model.player.currentTime))
+            .accessibilityValue(TimeFormat.string(model.player.displayTime))
 
             HStack {
-                Text(TimeFormat.string(model.player.currentTime))
+                Text(TimeFormat.string(model.player.displayTime))
                 Spacer()
                 Text(TimeFormat.string(duration))
             }

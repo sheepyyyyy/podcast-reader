@@ -41,6 +41,33 @@ struct ReaderModelTests {
         #expect(reader.activeLine == 1)
     }
 
+    /// The highlight moves when each word starts, rather than at the next routine tick,
+    /// because the reader asks the player to wake it then. That the player does so on time
+    /// is checked in the player's own tests.
+    @Test func theReaderAsksToWakeAtTheNextWord() async throws {
+        let reader = try await makeReader()
+        reader.player.seek(to: 2.5)
+        #expect(reader.player.requestedTick == 3)
+        reader.player.seek(to: 7.5)
+        #expect(reader.player.requestedTick == nil)
+        reader.setOnScreen(false)
+        reader.player.seek(to: 0.5)
+        #expect(reader.player.requestedTick == nil)
+        reader.setOnScreen(true)
+        #expect(reader.player.requestedTick == 1)
+    }
+
+    @Test func theHighlightWaitsWhileNoOneCanSeeIt() async throws {
+        let reader = try await makeReader()
+        reader.setOnScreen(false)
+        reader.player.seek(to: 4.5)
+        #expect(reader.activeWord == 0)
+        reader.addBookmark()
+        #expect(reader.lecture.bookmarks.map(\.wordIndex) == [4])
+        reader.setOnScreen(true)
+        #expect(reader.activeWord == 4)
+    }
+
     @Test func jumpSeeksToTheWordAndStaysPaused() async throws {
         let reader = try await makeReader()
         reader.jump(toWord: 3)
